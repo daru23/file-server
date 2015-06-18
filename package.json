@@ -1,0 +1,21 @@
+{
+  "name": "glusterfs",
+  "version": "1.0.0",
+  "description": "files manager using glusterfs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "daniela ruiz",
+  "license": "ISC",
+  "dependencies": {
+    "fs": "0.0.2",
+    "good": "^6.1.4",
+    "good-console": "^5.0.2",
+    "hapi": "^8.6.1",
+    "hapi-auth-cookie": "^3.0.1",
+    "multiparty": "^4.1.2",
+    "q": "^1.4.1",
+    "walk": "^2.3.9"
+  }
+}
