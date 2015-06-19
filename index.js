@@ -4,8 +4,8 @@
 
 var Hapi = require('hapi'),
     Good = require('good'),
-    fs   = require('fs'),
     routes = require('./routes.js');
+
 
 var server = new Hapi.Server();
 
@@ -26,18 +26,15 @@ server.register({
     options: {
         reporters: [{
             reporter: require('good-console'),
-            events: {
+             events: {
                 response: '*',
                 log: '*'
             }
         }]
     }
 }, function (err) {
-    if (err) {
-        throw err; // something bad happened loading the plugin
-    }
-
-    server.start(function () {
-        server.log('info', 'Server running at: ' + server.info.uri);
-    });
+      if (err) { throw err; }
+      server.start(function () {
+          server.log('info', 'Server running at: ' + server.info.uri);
+      });
 });
