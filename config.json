@@ -10,6 +10,7 @@
   },
   "listenChannel":"requestKey",
   "publishChannel":"requestKey",
+  "checksumChannel" : "checksumChannel",
   "dbFile":"./db.json",
   "crypto" : {
     "algorithm" : "aes-256-cbc",

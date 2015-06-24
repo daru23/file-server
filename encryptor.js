@@ -14,7 +14,7 @@ var crypto = require('crypto'),
 
 exports.encrypt = function (buffer, key, hash){
     var cipher = crypto.createCipher(ALGORITHM,key);
-    var bufferHash = Buffer.concat([buffer, (new Buffer(hash))]);
+    //var bufferHash = Buffer.concat([buffer, (new Buffer(hash))]);
     //If you want to concat the hash encrypt bufferHash
     var crypted = Buffer.concat([cipher.update(buffer),cipher.final()]);
     return crypted;
@@ -55,6 +55,29 @@ function bsplit (buf,splitBuf){
 
     return lines;
 }
+
+exports.checksum = function (str, algorithm, encoding) {
+    return crypto
+        .createHash(algorithm || 'md5')
+        .update(str, 'utf8')
+        .digest(encoding || 'hex')
+};
+
+exports.checksumBigFiles = function (file, algorithm){
+
+    var stream = fs.createReadStream(file),
+        hash = crypto.createHash('md5');
+
+    stream.on('data', function (data) {
+        hash.update(data, 'utf8')
+    });
+
+    stream.on('end', function () {
+        hash.digest('hex');
+    });
+
+    return hash;
+};
 
 //fs.readFile('/gluster/data/uploads/Lars395/rata.png', function (err,data) {
 //

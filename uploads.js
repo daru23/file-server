@@ -11,6 +11,7 @@ var fs = require('fs'),
     Q = require('q'),
     redis = require("redis"),
     listenClient = redis.createClient(config.redis.port, config.redis.server, {}),
+    listenClient2 = redis.createClient(config.redis.port, config.redis.server, {}),
     publishClient = redis.createClient(config.redis.port, config.redis.server, {}),
     timeouts = [],
     encryptor = require('./encryptor.js');
@@ -18,11 +19,11 @@ var fs = require('fs'),
 /************* Comunication to Redis Channel to get the key and encrypt the files *************************************/
 var requestKey = function(message) {
     publishClient.publish(config.publishChannel, JSON.stringify(message));
-    // Set timeout to catch keyvault error if response stays out
-    // timeouts[message.client.clientID] = setTimeout(
-    //    function(){
-    //        throw new Error('The KeyVault did not respond.');
-    //    }, 1500);
+};
+
+
+var requestObject = function (message) {
+    publishClient.publish(config.checksumChannel, JSON.stringify(message));
 };
 
 // Catch redis errors
@@ -33,15 +34,6 @@ listenClient.on("error", function (err) {
 publishClient.on("error", function (err) {
     console.log("Redis publish error " + err);
 });
-
-//// Catch redis errors
-//listenClient.on("message", function (channel, message) {
-//    clearTimeout(timeouts[message.clientID]);
-//    console.log(JSON.parse(message));
-//    //publishClient.quit();
-//    //listenClient.quit();
-//    //process.exit(0);
-//});
 
 var readKey = function (clientID, hash) {
 
@@ -63,8 +55,37 @@ var readKey = function (clientID, hash) {
     return deferred.promise;
 };
 
+var createObject = function (clientID, hash, file, checksum) {
+    var reqObject = {method:"CREATE"};
+    reqObject.file = {clientID:clientID, hash:hash, file:file, checksum:checksum};
+    reqObject.publishChannel = config.checksumChannel;
+    requestObject(reqObject);
+};
+
+var readObject = function (clientID, hash, file) {
+
+    var deferred = Q.defer();
+
+    var reqObject = {method:"READ"};
+
+    reqObject.file = {clientID:clientID, hash:hash, file:file};
+    reqObject.publishChannel = config.checksumChannel;
+    requestObject(reqObject);
+
+    listenClient2.on("message", function (channel, message) {
+        clearTimeout(timeouts[message.clientID]);
+        var answer = JSON.parse(message);
+        console.log(answer);
+        if (answer.clientID && answer.clientID == clientID && answer.hash && answer.hash == hash && answer.file == file){
+            deferred.resolve(message);
+        }
+    });
+    return deferred.promise;
+};
+
 // Listen to channel for requests
 listenClient.subscribe(config.listenChannel);
+listenClient2.subscribe(config.checksumChannel);
 
 /*********************************************** Public Functions *****************************************************/
 /**
@@ -97,30 +118,7 @@ exports.uploadFile = {
 
         var clientID = request.params.clientID,
             hash = request.params.hash,
-            form = new multiparty.Form(),
-            count = 0;
-
-        //form.on('error', function(err) {
-        //    console.log('Error parsing form: ' + err.stack);
-        //});
-        //
-        //form.on('file', function (name, file) {
-        //    readKey(clientID, hash).then(function (message, err) {
-        //        var clientObject = JSON.parse(message);
-        //        console.log(clientObject);
-        //        upload(file.path, file.originalFilename, clientObject.folder, clientObject.key, response);
-        //    });
-        //});
-        //
-        //// Close emitted after form parsed
-        //form.on('close', function() {
-        //    console.log('Upload completed!');
-        //    //return response('Uploaded complete!');
-        //});
-        //
-        //// Parse req
-        //form.parse(request.payload);
-
+            form = new multiparty.Form();
 
         form.parse(request.payload, function(err, fields, files) {
             if (err)
@@ -131,7 +129,7 @@ exports.uploadFile = {
                 readKey(clientID, hash).then(function (message, err) {
                     var clientObject = JSON.parse(message);
                     console.log(clientObject);
-                    upload(files, clientObject.folder, clientObject.key, clientObject.hash, response);
+                    upload(files, clientObject.clientID, clientObject.folder, clientObject.key, clientObject.hash, response);
                 });
             }
         });
@@ -157,37 +155,24 @@ exports.getFile = {
             fs.readFile(path, function(error, content) {
                 if (error)
                     return response("file not found");
-                //var contentType;
-                //switch (ext) {
-                //    case "pdf":
-                //        contentType = 'application/pdf';
-                //        break;
-                //    case "ppt":
-                //        contentType = 'application/vnd.ms-powerpoint';
-                //        break;
-                //    case "pptx":
-                //        contentType = 'application/vnd.openxmlformats-officedocument.preplyentationml.preplyentation';
-                //        break;
-                //    case "xls":
-                //        contentType = 'application/vnd.ms-excel';
-                //        break;
-                //    case "xlsx":
-                //        contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-                //        break;
-                //    case "doc":
-                //        contentType = 'application/msword';
-                //        break;
-                //    case "docx":
-                //        contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-                //        break;
-                //    case "csv":
-                //        contentType = 'application/octet-stream';
-                //        break;
-                //    default:
-                //        return response.file(path);
-                //}
+
                 var dfile = encryptor.decrypt(content, clientObject.key, clientObject.hash);
-                return response(dfile).header("Content-Disposition", "attachment; filename=" + file);
+
+                /* Checksum Md5*/
+                var checksum = encryptor.checksum(path, 'md5');
+
+                readObject(clientID, hash,file).then(function (message) {
+                    var checksumObject = JSON.parse(message);
+                    var checksum = encryptor.checksum(path, 'md5');
+
+                    if (checksumObject.checksum == checksum)
+                        return response(dfile).header("Content-Disposition", "attachment; filename=" + file);
+                    else
+                        return response("ERROR");
+                });
+
+                //return response(dfile).header("Content-Disposition", "attachment; filename=" + file);
+
             });
         });
     }
@@ -229,7 +214,7 @@ exports.fileList = {
 /**
  * Upload file
  */
-var upload = function(files, folderName, key, hash, response) {
+var upload = function(files, clientID, folderName, key, hash, response) {
 
     // Should encrypt file using the key
 
@@ -238,19 +223,25 @@ var upload = function(files, folderName, key, hash, response) {
         var fileName = files.file[0].originalFilename,
             size = files.file[0].size,
             path = config.publicFolder + folderName + '/' + fileName,
-            test = encryptor.encrypt(data, key, hash);
+            efile = encryptor.encrypt(data, key, hash);
 
         checkFileExist(folderName).then(function (err) {
             if (err) console.log('Error ' + err);
 
-            fs.writeFile(path, test, function (err) {
+            fs.writeFile(path, efile, function (err) {
                 if (err) console.log(err);
 
+                /* Checksum Md5*/
+                var checksum = encryptor.checksum(path, 'md5');
+
+                createObject(clientID, hash, fileName,checksum);
+
+                console.log(checksum);
+
                 //var decryptBuffer = encryptor.decrypt(test, key, hash);
-                //
                 //fs.writeFile(config.publicFolder + folderName + '/' + 'Decrypted_' + files.file[0].originalFilename,decryptBuffer, function (err) {
                 //    if (err) console.log(err);
-                    return response('Uploaded complete!');
+                return response('Uploaded complete!');
                 //});
 
             });
