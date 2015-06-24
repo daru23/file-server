@@ -10,5 +10,10 @@
   },
   "listenChannel":"requestKey",
   "publishChannel":"requestKey",
-  "dbFile":"./db.json"
+  "dbFile":"./db.json",
+  "crypto" : {
+    "algorithm" : "aes-256-cbc",
+    "iv" : "45891324564"
+  }
+
 }

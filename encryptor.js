@@ -6,46 +6,66 @@
  */
 
 var crypto = require('crypto'),
+    bufferIndexOf = require('buffer-indexof'),
     fs = require('fs'),
-    //program = require('commander'),
-    ALGORITHM = 'AES-256-CBC',
-    HMAC_ALGORITHM = 'SHA256';
+    //bsplit = require('buffer-split'),
+    config = require('./config.json'),
+    ALGORITHM = config.crypto. algorithm;
 
-exports.encryptFile = function (file, key, path) {
-
-    var aes = crypto.createCipher(ALGORITHM, key);
-    // ext
-    ext = file.substr(file.lastIndexOf('.') + 1);
-
-    var rstream = fs.createReadStream(file);
-    var wstream = fs.createWriteStream(path);
-
-    rstream   // reads from myfile.txt
-        .pipe(aes)  // encrypts with aes256
-        .pipe(wstream)  // writes to myfile.encrypted
-        .on('finish', function () {  // finished
-            console.log('done encrypting');
-    });
-
+exports.encrypt = function (buffer, key, hash){
+    var cipher = crypto.createCipher(ALGORITHM,key);
+    var bufferHash = Buffer.concat([buffer, (new Buffer(hash))]);
+    //If you want to concat the hash encrypt bufferHash
+    var crypted = Buffer.concat([cipher.update(buffer),cipher.final()]);
+    return crypted;
 };
 
-exports.unencryptFile = function (encryptedFile, key) {
+exports.decrypt = function (buffer, key, hash) {
+    var decipher = crypto.createDecipher(ALGORITHM, key);
+    var dec = Buffer.concat([decipher.update(buffer), decipher.final()]);
 
-    var aes = crypto.createDecipher(ALGORITHM, key);
+    return dec;
 
-    ext = encryptedFile.substr(encryptedFile.lastIndexOf('.') + 1);
+    /* For check decryption with hash uncomment this */
+    /*var n = result.length - 1;
+    var delim = new Buffer(hash);
+    var result = bsplit(dec, delim);
+    var hashDeco = result[n].toString('utf8');
 
-    var rstream = fs.createReadStream(encryptedFile);
-    var wstream = fs.createWriteStream('unncrypted.'+ext);
-
-    rstream   // reads from myfile.txt
-        .pipe(aes)  // decrypt with aes256
-        .pipe(wstream)  // output stdout
-        .on('finish', function () {  // finished
-            console.log('done unencrypting');
-        });
+    if (hash.search(hashDeco) != -1) {
+        console.log('Good Decryption!');
+        return result[0];
+    }else{
+        console.log('Bad Decryption!');
+    }
+    */
 };
 
- //this.encryptFile('myfile.txt', "5673dc790e84d1361e603c648e0d20b6bcc943b8001419861593d336940e430dce25d903a57a5c2b24963e7d02f7a4218c4abccfb37f5cc0143900d447537e58");
- //this.unencryptFile('esto.txt', "5673dc790e84d1361e603c648e0d20b6bcc943b8001419861593d336940e430dce25d903a57a5c2b24963e7d02f7a4218c4abccfb37f5cc0143900d447537e58" );
+function bsplit (buf,splitBuf){
+
+    var search = -1,
+        lines = [];
+
+    while((search = bufferIndexOf(buf,splitBuf)) > -1){
+        lines.push(buf.slice(0,search));
+        buf = buf.slice(splitBuf.length,buf.length);
+    }
+
+    if(buf.length) lines.push(buf);
+
+    return lines;
+}
+
+//fs.readFile('/gluster/data/uploads/Lars395/rata.png', function (err,data) {
+//
+//    var test = decrypt(data,"5673dc790e84d1361e603c648e0d20b6bcc943b8001419861593d336940e430dce25d903a57a5c2b24963e7d02f7a4218c4abccfb37f5cc0143900d447537e58", "aabbccddeef" );
+//
+//    fs.writeFile('/gluster/data/uploads/Lars395/Decrypted_rata.png',test, function (err) {
+//        if (err) console.log(err);
+//    });
+//
+//
+//});
+
+
 

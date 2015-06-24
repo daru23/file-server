@@ -100,40 +100,41 @@ exports.uploadFile = {
             form = new multiparty.Form(),
             count = 0;
 
-        form.on('error', function(err) {
-            console.log('Error parsing form: ' + err.stack);
-        });
-
-        form.on('file', function (name, file) {
-            readKey(clientID, hash).then(function (message, err) {
-                var clientObject = JSON.parse(message);
-                console.log(clientObject);
-                upload(file.path, file.originalFilename, clientObject.folder, clientObject.key, response);
-            });
-        });
-
-        //form.parse(request.payload, function(err, fields, files) {
-        //    if (err)
-        //        return response(err);
-        //    else {
-        //        // Ask for the key and the folder name
-        //        // promise!!!
-        //        readKey(clientID, hash).then(function (message, err) {
-        //            var clientObject = JSON.parse(message);
-        //            console.log(clientObject);
-        //            upload(files, clientObject.folder, clientObject.key, response);
-        //        });
-        //    }
+        //form.on('error', function(err) {
+        //    console.log('Error parsing form: ' + err.stack);
         //});
+        //
+        //form.on('file', function (name, file) {
+        //    readKey(clientID, hash).then(function (message, err) {
+        //        var clientObject = JSON.parse(message);
+        //        console.log(clientObject);
+        //        upload(file.path, file.originalFilename, clientObject.folder, clientObject.key, response);
+        //    });
+        //});
+        //
+        //// Close emitted after form parsed
+        //form.on('close', function() {
+        //    console.log('Upload completed!');
+        //    //return response('Uploaded complete!');
+        //});
+        //
+        //// Parse req
+        //form.parse(request.payload);
 
-        // Close emitted after form parsed
-        form.on('close', function() {
-            console.log('Upload completed!');
-            return response('Uploaded complete!');
+
+        form.parse(request.payload, function(err, fields, files) {
+            if (err)
+                return response(err);
+            else {
+                // Ask for the key and the folder name
+                // promise!!!
+                readKey(clientID, hash).then(function (message, err) {
+                    var clientObject = JSON.parse(message);
+                    console.log(clientObject);
+                    upload(files, clientObject.folder, clientObject.key, clientObject.hash, response);
+                });
+            }
         });
-
-        // Parse req
-        form.parse(request.payload);
     }
 };
 
@@ -156,36 +157,37 @@ exports.getFile = {
             fs.readFile(path, function(error, content) {
                 if (error)
                     return response("file not found");
-                var contentType;
-                switch (ext) {
-                    case "pdf":
-                        contentType = 'application/pdf';
-                        break;
-                    case "ppt":
-                        contentType = 'application/vnd.ms-powerpoint';
-                        break;
-                    case "pptx":
-                        contentType = 'application/vnd.openxmlformats-officedocument.preplyentationml.preplyentation';
-                        break;
-                    case "xls":
-                        contentType = 'application/vnd.ms-excel';
-                        break;
-                    case "xlsx":
-                        contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-                        break;
-                    case "doc":
-                        contentType = 'application/msword';
-                        break;
-                    case "docx":
-                        contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-                        break;
-                    case "csv":
-                        contentType = 'application/octet-stream';
-                        break;
-                    default:
-                        return response.file(path);
-                }
-                return response(content).header('Content-Type', contentType).header("Content-Disposition", "attachment; filename=" + file);
+                //var contentType;
+                //switch (ext) {
+                //    case "pdf":
+                //        contentType = 'application/pdf';
+                //        break;
+                //    case "ppt":
+                //        contentType = 'application/vnd.ms-powerpoint';
+                //        break;
+                //    case "pptx":
+                //        contentType = 'application/vnd.openxmlformats-officedocument.preplyentationml.preplyentation';
+                //        break;
+                //    case "xls":
+                //        contentType = 'application/vnd.ms-excel';
+                //        break;
+                //    case "xlsx":
+                //        contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+                //        break;
+                //    case "doc":
+                //        contentType = 'application/msword';
+                //        break;
+                //    case "docx":
+                //        contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+                //        break;
+                //    case "csv":
+                //        contentType = 'application/octet-stream';
+                //        break;
+                //    default:
+                //        return response.file(path);
+                //}
+                var dfile = encryptor.decrypt(content, clientObject.key, clientObject.hash);
+                return response(dfile).header("Content-Disposition", "attachment; filename=" + file);
             });
         });
     }
@@ -227,13 +229,31 @@ exports.fileList = {
 /**
  * Upload file
  */
-var upload = function(path, filename, folderName, key, response) {
+var upload = function(files, folderName, key, hash, response) {
+
     // Should encrypt file using the key
+
     fs.readFile(files.file[0].path, function(err, data) {
+
+        var fileName = files.file[0].originalFilename,
+            size = files.file[0].size,
+            path = config.publicFolder + folderName + '/' + fileName,
+            test = encryptor.encrypt(data, key, hash);
+
         checkFileExist(folderName).then(function (err) {
-            console.log(config.publicFolder + folderName + '/' + filename);
-            encryptor.encryptFile(path, key, config.publicFolder + folderName + '/' + filename);
-            return response('Uploaded complete!');
+            if (err) console.log('Error ' + err);
+
+            fs.writeFile(path, test, function (err) {
+                if (err) console.log(err);
+
+                //var decryptBuffer = encryptor.decrypt(test, key, hash);
+                //
+                //fs.writeFile(config.publicFolder + folderName + '/' + 'Decrypted_' + files.file[0].originalFilename,decryptBuffer, function (err) {
+                //    if (err) console.log(err);
+                    return response('Uploaded complete!');
+                //});
+
+            });
         });
     });
 };

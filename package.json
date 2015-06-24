@@ -9,6 +9,8 @@
   "author": "daniela ruiz",
   "license": "ISC",
   "dependencies": {
+    "buffer-indexof": "0.0.2",
+    "buffer-split": "0.0.0",
     "commander": "^2.8.1",
     "crypto": "0.0.3",
     "fs": "0.0.2",
